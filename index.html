@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced GitHub Dashboard</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
+</head>
+<body class="bg-gray-50">
+    <!-- Token Input Modal -->
+    <div id="tokenModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-white w-full max-w-md rounded-2xl p-6 m-4">
+            <div class="text-center mb-6">
+                <svg class="w-16 h-16 text-blue-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                </svg>
+                <h2 class="text-2xl font-bold">Connect to GitHub</h2>
+                <p class="text-gray-600 mt-2">Enter your GitHub personal access token to access your dashboard</p>
+            </div>
+            <input type="password" id="tokenInput" class="w-full p-4 border border-gray-300 rounded-xl mb-4" placeholder="ghp_your_token_here">
+            <button onclick="initializeWithToken()" class="w-full bg-blue-600 text-white font-medium py-4 rounded-xl hover:bg-blue-700">
+                Connect
+            </button>
+        </div>
+    </div>
+
+    <!-- User Details Modal -->
+    <div id="userDetailsModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 hidden">
+        <div class="bg-white w-full max-w-2xl rounded-2xl p-6 m-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold" id="modalTitle">User Details</h2>
+                <button onclick="closeUserModal()" class="text-gray-500 hover:text-gray-700">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div id="userDetailsContent"></div>
+        </div>
+    </div>
+
+    <!-- Main Dashboard -->
+    <div class="min-h-screen">
+        <!-- Header -->
+        <header class="bg-white shadow-sm sticky top-0 z-30">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center h-16">
+                    <div class="flex items-center">
+                        <img id="userAvatar" class="w-10 h-10 rounded-full" src="/api/placeholder/40/40" alt="Profile">
+                        <div class="ml-3">
+                            <h1 id="userName" class="text-lg font-medium">Loading...</h1>
+                            <p id="userHandle" class="text-sm text-gray-600">@username</p>
+                        </div>
+                    </div>
+                    <button onclick="logout()" class="text-gray-600 hover:text-gray-900">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <!-- Stats Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <div class="bg-white rounded-xl p-6 shadow-sm cursor-pointer hover:shadow-md transition-shadow" onclick="showUserDetails('followers')">
+                    <h3 class="text-sm font-medium text-gray-500">Followers</h3>
+                    <p id="followersCount" class="text-2xl font-bold mt-2">-</p>
+                </div>
+                <div class="bg-white rounded-xl p-6 shadow-sm cursor-pointer hover:shadow-md transition-shadow" onclick="showUserDetails('following')">
+                    <h3 class="text-sm font-medium text-gray-500">Following</h3>
+                    <p id="followingCount" class="text-2xl font-bold mt-2">-</p>
+                </div>
+                <div class="bg-white rounded-xl p-6 shadow-sm">
+                    <h3 class="text-sm font-medium text-gray-500">Public Repos</h3>
+                    <p id="publicRepoCount" class="text-2xl font-bold mt-2">-</p>
+                </div>
+                <div class="bg-white rounded-xl p-6 shadow-sm">
+                    <h3 class="text-sm font-medium text-gray-500">Private Repos</h3>
+                    <p id="privateRepoCount" class="text-2xl font-bold mt-2">-</p>
+                </div>
+            </div>
+
+            <!-- Activity Chart -->
+            <div class="bg-white rounded-xl p-6 shadow-sm mb-8">
+                <h3 class="text-lg font-medium mb-4">Contribution Activity</h3>
+                <canvas id="activityChart" height="100"></canvas>
+            </div>
+
+            <!-- Repository List -->
+            <div class="bg-white/500 rounded-xl p-6 shadow-sm">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-lg font-medium">Repositories</h3>
+                    <div class="flex space-x-2">
+                        <button id="showAllRepos" class="px-3 py-2 rounded-lg bg-gray-100 hover:bg-gray-200">All</button>
+                        <button id="showPublicRepos" class="px-3 py-2 rounded-lg bg-gray-100 hover:bg-gray-200">Public</button>
+                        <button id="showPrivateRepos" class="px-3 py-2 rounded-lg bg-gray-100 hover:bg-gray-200">Private</button>
+                    </div>
+                </div>
+                <div id="repoList" class="space-y-4"></div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toastContainer" class="fixed bottom-4 right-4 space-y-2"></div>
+
+
+    <script>
+        let githubToken = '';
+
+// Initialize with token
+function initializeWithToken() {
+    const token = document.getElementById('tokenInput').value.trim();
+    if (!token) {
+        showToast('Please enter a valid token', 'error');
+        return;
+    }
+    
+    githubToken = token;
+    localStorage.setItem('github_token', token);
+    document.getElementById('tokenModal').style.display = 'none';
+    initializeDashboard();
+}
+
+// Show toast notification
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    const bgColor = type === 'error' ? 'bg-red-500' : 'bg-gray-800';
+    toast.className = `${bgColor} text-white px-6 py-3 rounded-lg shadow-lg transform transition-all duration-300`;
+    toast.textContent = message;
+    
+    document.getElementById('toastContainer').appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+// Initialize dashboard
+async function initializeDashboard() {
+    try {
+        const userData = await fetchUserData();
+        updateUserProfile(userData);
+        await Promise.all([
+            fetchFollowers(),
+            fetchFollowing(),
+            fetchRepositories(),
+            initializeActivityChart()
+        ]);
+    } catch (error) {
+        showToast('Login successful', 'error');
+        console.error('Dashboard initialization error:', error);
+    }
+}
+
+// Fetch user data
+async function fetchUserData() {
+    const response = await fetch('https://api.github.com/user', {
+        headers: { 'Authorization': `token ${githubToken}` }
+    });
+    if (!response.ok) throw new Error('Failed to fetch user data');
+    return response.json();
+}
+
+// Update user profile
+function updateUserProfile(userData) {
+    document.getElementById('userAvatar').src = userData.avatar_url;
+    document.getElementById('userName').textContent = userData.name || userData.login;
+    document.getElementById('userHandle').textContent = `@${userData.login}`;
+}
+
+// Fetch followers
+async function fetchFollowers() {
+    const response = await fetch('https://api.github.com/user/followers', {
+        headers: { 'Authorization': `token ${githubToken}` }
+    });
+    const followers = await response.json();
+    document.getElementById('followersCount').textContent = followers.length;
+    return followers;
+}
+
+// Fetch following
+async function fetchFollowing() {
+    const response = await fetch('https://api.github.com/user/following', {
+        headers: { 'Authorization': `token ${githubToken}` }
+    });
+    const following = await response.json();
+    document.getElementById('followingCount').textContent = following.length;
+    return following;
+}
+
+// Show user details modal
+async function showUserDetails(type) {
+    const modal = document.getElementById('userDetailsModal');
+    const content = document.getElementById('userDetailsContent');
+    const title = document.getElementById('modalTitle');
+    
+    modal.classList.remove('hidden');
+    content.innerHTML = '<div class="animate-pulse">Loading...</div>';
+    
+    try {
+        const response = await fetch(`https://api.github.com/user/${type}`, {
+            headers: { 'Authorization': `token ${githubToken}` }
+        });
+        const users = await response.json();
+        
+        title.textContent = type.charAt(0).toUpperCase() + type.slice(1);
+        content.innerHTML = users.map(user => `
+            <div class="flex items-center space-x-4 p-4 hover:bg-gray-50 rounded-lg">
+                <img src="${user.avatar_url}" alt="${user.login}" class="w-12 h-12 rounded-full">
+                <div>
+                    <h4 class="font-medium">${user.login}</h4>
+                    <a href="${user.html_url}" target="_blank" class="text-blue-600 hover:underline">View Profile</a>
+                </div>
+            </div>
+        `).join('');
+    } catch (error) {
+        content.innerHTML = '<p class="text-red-500">Error loading user details</p>';
+    }
+}
+
+// Close user modal
+function closeUserModal() {
+    document.getElementById('userDetailsModal').classList.add('hidden');
+}
+
+// Fetch repositories
+// Fetch repositories with language data
+async function fetchRepositories() {
+    try {
+        const response = await fetch('https://api.github.com/user/repos?sort=updated&per_page=100', {
+            headers: { 'Authorization': `token ${githubToken}` }
+        });
+        const repos = await response.json();
+        
+        const publicRepos = repos.filter(repo => !repo.private);
+        const privateRepos = repos.filter(repo => repo.private);
+        
+        document.getElementById('publicRepoCount').textContent = publicRepos.length;
+        document.getElementById('privateRepoCount').textContent = privateRepos.length;
+        
+        // Fetch language data for each repository
+        const reposWithLanguages = await Promise.all(
+            repos.map(async (repo) => {
+                try {
+                    const langResponse = await fetch(repo.languages_url, {
+                        headers: { 'Authorization': `token ${githubToken}` }
+                    });
+                    const languages = await langResponse.json();
+                    return { ...repo, languages };
+                } catch (error) {
+                    console.error(`Error fetching languages for ${repo.name}:`, error);
+                    return { ...repo, languages: {} };
+                }
+            })
+        );
+        
+        updateRepoList(reposWithLanguages);
+        
+        // Set up filter buttons
+        document.getElementById('showAllRepos').onclick = () => updateRepoList(reposWithLanguages);
+        document.getElementById('showPublicRepos').onclick = () => updateRepoList(reposWithLanguages.filter(repo => !repo.private));
+        document.getElementById('showPrivateRepos').onclick = () => updateRepoList(reposWithLanguages.filter(repo => repo.private));
+    } catch (error) {
+        showToast('Error loading repositories', 'error');
+    }
+}
+
+// Create a pie chart for repository languages
+function createLanguageChart(canvasId, languages) {
+    const ctx = document.getElementById(canvasId).getContext('2d');
+    
+    // Convert languages object to arrays of labels and data
+    const labels = Object.keys(languages);
+    const data = Object.values(languages);
+    
+    if (labels.length === 0) {
+        // If no languages data, show "No language data" message
+        ctx.font = '14px Arial';
+        ctx.fillStyle = '#666';
+        ctx.textAlign = 'center';
+        ctx.fillText('No language data available', ctx.canvas.width / 2, ctx.canvas.height / 2);
+        return;
+    }
+    
+    // Generate random colors for each language
+    const colors = labels.map(() => {
+        const r = Math.floor(Math.random() * 200);
+        const g = Math.floor(Math.random() * 200);
+        const b = Math.floor(Math.random() * 200);
+        return `rgb(${r}, ${g}, ${b})`;
+    });
+    
+    // Calculate percentages for the total
+    const total = data.reduce((acc, val) => acc + val, 0);
+    const percentages = data.map(value => ((value / total) * 100).toFixed(1));
+    
+    new Chart(ctx, {
+        type: 'pie',
+        data: {
+            labels: labels.map((label, i) => `${label} (${percentages[i]}%)`),
+            datasets: [{
+                data: data,
+                backgroundColor: colors,
+                borderWidth: 1,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'right',
+                    labels: {
+                        boxWidth: 12,
+                        font: {
+                            size: 10
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function updateRepoList(repos) {
+    const repoList = document.getElementById('repoList');
+    repoList.innerHTML = repos.map((repo, index) => `
+        <div class="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+            <div class="flex justify-between items-start">
+                <div class="w-full">
+                    <a href="${repo.html_url}" target="_blank" class="group">
+                       <h4 class="font-medium text-lg text-blue-600 group-hover:underline break-words">${repo.name}</h4>
+
+                    </a>
+                    <p class="text-gray-600 text-sm mt-1">${repo.description || 'No description'}</p>
+                    <div class="flex items-center space-x-4 mt-2">
+                        <span class="flex items-center text-sm text-gray-500">
+                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.519 4.674c.3.921-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.519-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.783-.57-.38-1.81.588-1.81h4.915a1 1 0 00.95-.69l1.519-4.674z"/>
+                            </svg>
+                            ${repo.stargazers_count}
+                        </span>
+                        <span class="flex items-center text-sm text-gray-500">
+                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
+                            </svg>
+                            ${repo.forks_count}
+                        </span>
+                        <span class="px-2 py-1 text-xs rounded-full ${repo.private ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}">
+                            ${repo.private ? 'Private' : 'Public'}
+                        </span>
+                    </div>
+                    <div class="mt-4 h-48">
+                        <canvas id="langChart${index}"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+    
+    // Create language charts for each repository
+    repos.forEach((repo, index) => {
+        const canvas = document.getElementById(`langChart${index}`);
+        if (canvas) {
+            createLanguageChart(`langChart${index}`, repo.languages);
+        }
+    });
+}
+// Initialize activity chart
+function initializeActivityChart() {
+    const ctx = document.getElementById('activityChart').getContext('2d');
+    
+    // Get last 7 days
+    const labels = Array.from({length: 7}, (_, i) => {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        return d.toLocaleDateString('en-US', { weekday: 'short' });
+    }).reverse();
+
+    // Sample data - in real app, you'd fetch this from GitHub's API
+    const data = {
+        labels: labels,
+        datasets: [{
+            label: 'Contributions',
+            data: [4, 6, 8, 3, 7, 5, 9],
+            fill: true,
+            borderColor: 'rgb(59, 130, 246)',
+            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+            tension: 0.4
+        }]
+    };
+
+    const config = {
+        type: 'line',
+        data: data,
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            },
+            interaction: {
+                intersect: false,
+                mode: 'index',
+            }
+        }
+    };
+
+    new Chart(ctx, config);
+}
+
+// Logout function
+function logout() {
+    localStorage.removeItem('github_token');
+    githubToken = '';
+    document.getElementById('tokenModal').style.display = 'flex';
+    showToast('Logged out successfully');
+}
+
+// Check for stored token on page load
+document.addEventListener('DOMContentLoaded', () => {
+    const storedToken = localStorage.getItem('github_token');
+    if (storedToken) {
+        githubToken = storedToken;
+        initializeDashboard();
+        document.getElementById('tokenModal').style.display = 'none';
+    }
+});
+
+// Add filter button active states
+function setActiveFilter(button) {
+    const buttons = document.querySelectorAll('#showAllRepos, #showPublicRepos, #showPrivateRepos');
+    buttons.forEach(btn => btn.classList.remove('bg-blue-100', 'text-blue-600'));
+    button.classList.add('bg-blue-100', 'text-blue-600');
+}
+
+document.getElementById('showAllRepos').addEventListener('click', function() {
+    setActiveFilter(this);
+});
+
+document.getElementById('showPublicRepos').addEventListener('click', function() {
+    setActiveFilter(this);
+});
+
+document.getElementById('showPrivateRepos').addEventListener('click', function() {
+    setActiveFilter(this);
+});
+
+// Add pull-to-refresh functionality
+let touchStart = null;
+let touchEnd = null;
+
+document.addEventListener('touchstart', (e) => {
+    touchStart = e.touches[0].clientY;
+});
+
+document.addEventListener('touchmove', (e) => {
+    if (!touchStart) return;
+    touchEnd = e.touches[0].clientY;
+    
+    const distance = touchEnd - touchStart;
+    if (distance > 100 && window.scrollY === 0) {
+        refreshDashboard();
+        touchStart = null;
+        touchEnd = null;
+    }
+});
+
+async function refreshDashboard() {
+    showToast('Refreshing dashboard...');
+    await initializeDashboard();
+    showToast('Dashboard updated');
+}  </script>
+</body>
+</html>
