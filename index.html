@@ -335,10 +335,10 @@ function updateRepoList(repos) {
         <div class="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
             <div class="flex justify-between items-start">
                 <div class="w-full">
-                    <a href="${repo.html_url}" target="_blank" class="group">
+                    <p href="${repo.html_url}" target="_blank" class="group">
                        <h4 class="font-medium text-lg text-blue-600 group-hover:underline break-words">${repo.name}</h4>
 
-                    </a>
+                    </p>
                     <p class="text-gray-600 text-sm mt-1">${repo.description || 'No description'}</p>
                     <div class="flex items-center space-x-4 mt-2">
                         <span class="flex items-center text-sm text-gray-500">
